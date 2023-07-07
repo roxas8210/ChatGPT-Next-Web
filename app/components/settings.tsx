@@ -40,7 +40,7 @@ import Locale, {
 } from "../locales";
 import { copyToClipboard } from "../utils";
 import Link from "next/link";
-import { Path, UPDATE_URL } from "../constant";
+import { Path, RELEASE_URL, UPDATE_URL } from "../constant";
 import { Prompt, SearchService, usePromptStore } from "../store/prompt";
 import { ErrorBoundary } from "./error";
 import { InputRange } from "./input-range";
@@ -310,19 +310,6 @@ function SyncItems() {
   );
 }
 
-function formatVersionDate(t: string) {
-  const d = new Date(+t);
-  const year = d.getUTCFullYear();
-  const month = d.getUTCMonth() + 1;
-  const day = d.getUTCDate();
-
-  return [
-    year.toString(),
-    month.toString().padStart(2, "0"),
-    day.toString().padStart(2, "0"),
-  ].join("");
-}
-
 export function Settings() {
   const navigate = useNavigate();
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -332,9 +319,10 @@ export function Settings() {
 
   const updateStore = useUpdateStore();
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  const currentVersion = formatVersionDate(updateStore.version);
-  const remoteId = formatVersionDate(updateStore.remoteVersion);
+  const currentVersion = updateStore.formatVersion(updateStore.version);
+  const remoteId = updateStore.formatVersion(updateStore.remoteVersion);
   const hasNewVersion = currentVersion !== remoteId;
+  const updateUrl = getClientConfig()?.isApp ? RELEASE_URL : UPDATE_URL;
 
   function checkUpdate(force = false) {
     setCheckingUpdate(true);
@@ -342,14 +330,8 @@ export function Settings() {
       setCheckingUpdate(false);
     });
 
-    console.log(
-      "[Update] local version ",
-      new Date(+updateStore.version).toLocaleString(),
-    );
-    console.log(
-      "[Update] remote version ",
-      new Date(+updateStore.remoteVersion).toLocaleString(),
-    );
+    console.log("[Update] local version ", updateStore.version);
+    console.log("[Update] remote version ", updateStore.remoteVersion);
   }
 
   const usage = {
@@ -358,6 +340,10 @@ export function Settings() {
   };
   const [loadingUsage, setLoadingUsage] = useState(false);
   function checkUsage(force = false) {
+    if (accessStore.hideBalanceQuery) {
+      return;
+    }
+
     setLoadingUsage(true);
     updateStore.updateUsage(force).finally(() => {
       setLoadingUsage(false);
@@ -460,7 +446,7 @@ export function Settings() {
             {checkingUpdate ? (
               <LoadingIcon />
             ) : hasNewVersion ? (
-              <Link href={UPDATE_URL} target="_blank" className="link">
+              <Link href={updateUrl} target="_blank" className="link">
                 {Locale.Settings.Update.GoToUpdate}
               </Link>
             ) : (
@@ -556,10 +542,12 @@ export function Settings() {
               }
             ></input>
           </ListItem>
+        </List>
 
+        <List>
           <ListItem
-            title={Locale.Settings.Mask.Title}
-            subTitle={Locale.Settings.Mask.SubTitle}
+            title={Locale.Settings.Mask.Splash.Title}
+            subTitle={Locale.Settings.Mask.Splash.SubTitle}
           >
             <input
               type="checkbox"
@@ -569,6 +557,22 @@ export function Settings() {
                   (config) =>
                     (config.dontShowMaskSplashScreen =
                       !e.currentTarget.checked),
+                )
+              }
+            ></input>
+          </ListItem>
+
+          <ListItem
+            title={Locale.Settings.Mask.Builtin.Title}
+            subTitle={Locale.Settings.Mask.Builtin.SubTitle}
+          >
+            <input
+              type="checkbox"
+              checked={config.hideBuiltinMasks}
+              onChange={(e) =>
+                updateConfig(
+                  (config) =>
+                    (config.hideBuiltinMasks = e.currentTarget.checked),
                 )
               }
             ></input>
@@ -595,19 +599,34 @@ export function Settings() {
           )}
 
           {!accessStore.hideUserApiKey ? (
-            <ListItem
-              title={Locale.Settings.Token.Title}
-              subTitle={Locale.Settings.Token.SubTitle}
-            >
-              <PasswordInput
-                value={accessStore.token}
-                type="text"
-                placeholder={Locale.Settings.Token.Placeholder}
-                onChange={(e) => {
-                  accessStore.updateToken(e.currentTarget.value);
-                }}
-              />
-            </ListItem>
+            <>
+              <ListItem
+                title={Locale.Settings.Endpoint.Title}
+                subTitle={Locale.Settings.Endpoint.SubTitle}
+              >
+                <input
+                  type="text"
+                  value={accessStore.openaiUrl}
+                  placeholder="https://api.openai.com/"
+                  onChange={(e) =>
+                    accessStore.updateOpenAiUrl(e.currentTarget.value)
+                  }
+                ></input>
+              </ListItem>
+              <ListItem
+                title={Locale.Settings.Token.Title}
+                subTitle={Locale.Settings.Token.SubTitle}
+              >
+                <PasswordInput
+                  value={accessStore.token}
+                  type="text"
+                  placeholder={Locale.Settings.Token.Placeholder}
+                  onChange={(e) => {
+                    accessStore.updateToken(e.currentTarget.value);
+                  }}
+                />
+              </ListItem>
+            </>
           ) : null}
 
           {!accessStore.hideBalanceQuery ? (
@@ -633,22 +652,6 @@ export function Settings() {
                   onClick={() => checkUsage(true)}
                 />
               )}
-            </ListItem>
-          ) : null}
-
-          {!accessStore.hideUserApiKey ? (
-            <ListItem
-              title={Locale.Settings.Endpoint.Title}
-              subTitle={Locale.Settings.Endpoint.SubTitle}
-            >
-              <input
-                type="text"
-                value={accessStore.openaiUrl}
-                placeholder="https://api.openai.com/"
-                onChange={(e) =>
-                  accessStore.updateOpenAiUrl(e.currentTarget.value)
-                }
-              ></input>
             </ListItem>
           ) : null}
         </List>
